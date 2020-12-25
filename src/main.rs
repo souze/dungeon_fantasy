@@ -1,17 +1,11 @@
-use amethyst::{
-    core::transform::TransformBundle,
-    input::{InputBundle, StringBindings},
-    prelude::*,
-    renderer::{
+use amethyst::{core::transform::TransformBundle, input::{InputBundle, StringBindings}, prelude::*, renderer::{
         plugins::{RenderFlat2D, RenderToWindow},
         types::DefaultBackend,
         RenderingBundle,
-    },
-    ui::{RenderUi, UiBundle},
-    utils::application_root_dir,
-};
+    }, ui::{RenderUi, UiBundle}, utils::application_root_dir};
 
-mod state;
+mod states;
+mod systems;
 
 fn main() -> amethyst::Result<()> {
     amethyst::start_logger(Default::default());
@@ -36,9 +30,12 @@ fn main() -> amethyst::Result<()> {
                 )
                 .with_plugin(RenderUi::default())
                 .with_plugin(RenderFlat2D::default()),
-        )?;
+        )?
+        .with_system_desc(systems::SimpleButtonSystemDesc, "SimpleButtonSystem", &[])
+        // .with(systems::SimpleButtonSystem, "button_system", &["input_system"]);
+        ;
 
-    let mut game = Application::new(resources, state::MyState, game_data)?;
+    let mut game = Application::new(resources, states::CombatState, game_data)?;
     game.run();
 
     Ok(())

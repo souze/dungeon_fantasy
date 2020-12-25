@@ -1,22 +1,11 @@
-use amethyst::{
-    assets::{AssetStorage, Loader},
-    core::transform::Transform,
-    input::{get_key, is_close_requested, is_key_down, VirtualKeyCode},
-    prelude::*,
-    renderer::{Camera, ImageFormat, SpriteRender, SpriteSheet, SpriteSheetFormat, Texture},
-    ui::{
-        Anchor, FontHandle, LineMode, TtfFormat, UiImage, UiText,
-        UiTransform,
-    },
-    window::ScreenDimensions,
-};
+use amethyst::{assets::Loader, core::{transform::Transform}, ecs::Entity, input::{get_key, is_close_requested, is_key_down, VirtualKeyCode}, prelude::*, renderer::Camera, ui::{Anchor, FontHandle, LineMode, TtfFormat, UiButton, UiImage, UiText, UiTransform}, window::ScreenDimensions};
 
 use log::info;
 
 /// A dummy game state that shows 3 sprites.
-pub struct MyState;
+pub struct CombatState;
 
-impl SimpleState for MyState {
+impl SimpleState for CombatState {
     // Here, we define hooks that will be called throughout the lifecycle of our game state.
     //
     // In this example, `on_start` is used for initializing entities
@@ -39,11 +28,12 @@ impl SimpleState for MyState {
         // Place the camera
         init_camera(world, &dimensions);
 
-        // Load our sprites and display them
-        let sprites = load_sprites(world);
-        init_sprites(world, &sprites, &dimensions);
-
         create_ui_example(world);
+
+        let texts = vec!["Claw".to_string(), "Stab".into(), "Fireball".into(), "Chicken".into(), 
+                                           "Suicide".into(), "Inventory".into(), "".into(), "Escape".into()];
+        let buttons = create_buttons(world, 2, 4, texts);
+        println!("{:?}", buttons)
     }
 
     /// The following events are handled:
@@ -90,77 +80,71 @@ fn init_camera(world: &mut World, dimensions: &ScreenDimensions) {
         .build();
 }
 
-/// Loads and splits the `logo.png` image asset into 3 sprites,
-/// which will then be assigned to entities for rendering them.
-///
-/// The provided `world` is used to retrieve the resource loader.
-fn load_sprites(world: &mut World) -> Vec<SpriteRender> {
-    // Load the texture for our sprites. We'll later need to
-    // add a handle to this texture to our `SpriteRender`s, so
-    // we need to keep a reference to it.
-    let texture_handle = {
-        let loader = world.read_resource::<Loader>();
-        let texture_storage = world.read_resource::<AssetStorage<Texture>>();
-        loader.load(
-            "sprites/logo.png",
-            ImageFormat::default(),
-            (),
-            &texture_storage,
-        )
-    };
 
-    // Load the spritesheet definition file, which contains metadata on our
-    // spritesheet texture.
-    let sheet_handle = {
-        let loader = world.read_resource::<Loader>();
-        let sheet_storage = world.read_resource::<AssetStorage<SpriteSheet>>();
-        loader.load(
-            "sprites/logo.ron",
-            SpriteSheetFormat(texture_handle),
-            (),
-            &sheet_storage,
-        )
-    };
+fn create_buttons(world: &mut World, rows: u32, cols: u32, texts: Vec<String>) -> Vec<Entity> {
+    let width: u32 = 90;
+    let height: u32 = 20;
+    let start_x: u32 = 10 + width/2;
+    let start_y: u32 = 10 + height/2;
+    let x_offset: u32 = 100;
+    let y_offset: u32 = 30;
 
-    // Create our sprite renders. Each will have a handle to the texture
-    // that it renders from. The handle is safe to clone, since it just
-    // references the asset.
-    (0..3)
-        .map(|i| SpriteRender {
-            sprite_sheet: sheet_handle.clone(),
-            sprite_number: i,
-        })
-        .collect()
+    let mut buttons: Vec<Entity> = Vec::new();
+
+    for y in 0..rows {
+        for x in 0..cols {
+            // TODO, how do i get the x + y*rows?
+            let text: &String = texts.get((x+y*cols) as usize).unwrap();
+            buttons.push(create_button(world, start_x+x*x_offset, start_y+y*y_offset,
+                width, height, text));
+        }
+    }
+    buttons
 }
 
-/// Creates an entity in the `world` for each of the provided `sprites`.
-/// They are individually placed around the center of the screen.
-fn init_sprites(world: &mut World, sprites: &[SpriteRender], dimensions: &ScreenDimensions) {
-    for (i, sprite) in sprites.iter().enumerate() {
-        // Center our sprites around the center of the window
-        let x = (i as f32 - 1.) * 100. + dimensions.width() * 0.5;
-        let y = (i as f32 - 1.) * 100. + dimensions.height() * 0.5;
-        let mut transform = Transform::default();
-        transform.set_translation_xyz(x, y, 0.);
+fn create_button(world: &mut World, x: u32, y: u32, w: u32, h: u32, text: &String) -> Entity {
+    let minus_x = -(x as i32);
+    let ui_transform = UiTransform::new(
+        String::from("simple_button".to_string() + &u32::to_string(&x) + &u32::to_string(&y)), // id
+        Anchor::BottomRight,                // anchor
+        Anchor::Middle,                // pivot
+        minus_x as f32,                          // x
+        y as f32,                          // y
+        0f32,                          // z
+        w as f32,                        // width
+        h as f32,                         // height
+    );
 
-        // Create an entity for each sprite and attach the `SpriteRender` as
-        // well as the transform. If you want to add behaviour to your sprites,
-        // you'll want to add a custom `Component` that will identify them, and a
-        // `System` that will iterate over them. See https://book.amethyst.rs/stable/concepts/system.html
-        world
-            .create_entity()
-            .with(sprite.clone())
-            .with(transform)
-            .build();
-    }
+    let font: FontHandle = world.read_resource::<Loader>().load(
+        "fonts/Bangers-Regular.ttf",
+        TtfFormat,
+        (),
+        &world.read_resource(),
+    );
+
+    let ui_text = UiText::new(
+        font,                          // font
+        text.clone(), // text
+        [0.0, 0.0, 0.0, 1.0],          // color
+        25f32,                         // font_size
+        LineMode::Single,              // line mode
+        Anchor::Middle,                // alignment
+    );
+
+    /* Building the entity */
+    world
+        .create_entity()
+        .with(ui_transform)
+        .with(ui_text)
+        .with(amethyst::ui::Interactable)
+        .build()
 }
 
 /// Creates a simple UI background and a UI text label
 /// This is the pure code only way to create UI with amethyst.
 pub fn create_ui_example(world: &mut World) {
     // this creates the simple gray background UI element.
-    #[allow(unused)]
-    let ui_background = world
+    world
         .create_entity()
         .with(UiImage::SolidColor([0.6, 0.1, 0.2, 1.0]))
         .with(UiTransform::new(

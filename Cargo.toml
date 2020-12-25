@@ -1,7 +1,7 @@
 [package]
-name = "amethyst-starter-2d"
-version = "0.2.0"
-authors = ["Hilmar Wiegand <me@hwgnd.de>", "Amethyst Foundation <contact@amethyst.rs>"]
+name = "adventure_fantasy"
+version = "0.0.0"
+authors = ["Erik", "Hannes"]
 edition = "2018"
 
 [dependencies]
