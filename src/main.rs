@@ -1,3 +1,6 @@
+#![allow(unused_imports)]
+#![allow(dead_code)]
+
 use amethyst::{core::transform::TransformBundle, input::{InputBundle, StringBindings}, prelude::*, renderer::{
         plugins::{RenderFlat2D, RenderToWindow},
         types::DefaultBackend,
@@ -6,6 +9,7 @@ use amethyst::{core::transform::TransformBundle, input::{InputBundle, StringBind
 
 mod states;
 mod systems;
+
 
 fn main() -> amethyst::Result<()> {
     amethyst::start_logger(Default::default());
@@ -31,11 +35,8 @@ fn main() -> amethyst::Result<()> {
                 .with_plugin(RenderUi::default())
                 .with_plugin(RenderFlat2D::default()),
         )?
-        .with_system_desc(systems::SimpleButtonSystemDesc, "SimpleButtonSystem", &[])
-        // .with(systems::SimpleButtonSystem, "button_system", &["input_system"]);
         ;
-
-    let mut game = Application::new(resources, states::CombatState, game_data)?;
+    let mut game = Application::new(resources, states::combatstate::CombatState::default(), game_data)?;
     game.run();
 
     Ok(())

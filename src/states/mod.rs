@@ -1,3 +1,3 @@
-pub use self::combatstate::CombatState;
+use self::combatstate::CombatState;
 
-mod combatstate;
+pub mod combatstate;
