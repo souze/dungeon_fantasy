@@ -210,7 +210,7 @@ fn create_event_log(world: &mut World)
         ))
         .build();
     
-    world.insert(event_log)
+    world.insert(EventLogText{content: event_log})
 }
 
 #[derive(Default)]
@@ -218,6 +218,6 @@ struct EventLog {
     lines: Vec<String>,
 }
 
-struct EventLogText {
-    content: Entity,
+pub struct EventLogText {
+    pub content: Entity,
 }
