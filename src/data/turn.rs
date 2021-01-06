@@ -1,0 +1,3 @@
+struct TurnToken {
+    token: UnitReference,
+}

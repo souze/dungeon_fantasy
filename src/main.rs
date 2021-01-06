@@ -9,6 +9,7 @@ use amethyst::{core::transform::TransformBundle, input::{InputBundle, StringBind
 
 mod states;
 mod systems;
+mod data;
 
 
 fn main() -> amethyst::Result<()> {

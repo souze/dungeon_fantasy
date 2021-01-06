@@ -1,34 +1,33 @@
-use amethyst::{prelude::*, shred::{Read, System, Write, SystemData}, shrev::{EventChannel, ReaderId}, ui::UiEventType};
+use amethyst::{ecs::{ReadStorage, WriteStorage}, prelude::*, shred::{Read, ReadExpect, System, SystemData, Write, WriteExpect}, shrev::{EventChannel, ReaderId}, ui::{UiEvent, UiEventType}};
 use amethyst::derive::*;
+use amethyst::ecs::Join;
 
-#[derive(SystemDesc)]
-#[system_desc(name(PlayerTurnSystemDesc))]
-pub struct PlayerTurnSystem {
-    #[system_desc(event_channel_reader)]
-    ui_reader_id: ReaderId<amethyst::ui::UiEvent>,
-}
-
-impl<'s> System<'s> for PlayerTurnSystem {
-    type SystemData = (
-        Read<'s, EventChannel<amethyst::ui::UiEvent>>,
-        Write<'s, EventChannel<CombatEvent>>);
-
-    fn run(&mut self, (ui_events, mut combat_events): Self::SystemData) {
-        for event in ui_events.read(&mut self.ui_reader_id) {
-            if event.event_type == UiEventType::ClickStart {
-                let combat_event: CombatEvent = CombatEvent{source: "You".into(), target: "Gnoll".into(), spell_template: SpellTemplate{damage: 42}};
-                println!("Putting combat event on the channel");
-                combat_events.single_write(combat_event);
-            }
-        }
-    }
-}
+use crate::data::{Player, TurnOrder, monster::{Monster, MonsterIdentifier}};
+use crate::data::monster::UnitReference;
 
 #[derive(Debug)]
 pub struct CombatEvent {
     source: String,
-    target: String,
+    target: UnitReference,
     spell_template:  SpellTemplate,
+
+    results: Vec<CombatResult>,
+}
+
+impl CombatEvent {
+    fn new(source: String, target: UnitReference, spell_template: SpellTemplate) -> Self {
+        Self{source, target, spell_template, results: Vec::new()}
+    }
+
+    fn add_result(&mut self, result: CombatResult) {
+        self.results.push(result);
+    }
+}
+
+#[derive(Debug)]
+enum CombatResult {
+    TakeDamage(u32),
+    Death,
 }
 
 #[derive(Debug)]
@@ -36,33 +35,105 @@ struct SpellTemplate {
     damage: u32,
 }
 
-impl PlayerTurnSystem {
-    pub fn new(ui_reader_id: amethyst::shrev::ReaderId<amethyst::ui::UiEvent>) -> Self {
-        Self {
-            ui_reader_id,
-        }
-    }
-}
-
 #[derive(SystemDesc)]
 #[system_desc(name(CombatEvaluationSystemDesc))]
 pub struct CombatEvaluationSystem {
     #[system_desc(event_channel_reader)]
     combat_reader_id: ReaderId<CombatEvent>,
+    #[system_desc(event_channel_reader)]
+    ui_reader_id: ReaderId<amethyst::ui::UiEvent>,
 }
 
 impl CombatEvaluationSystem {
-    pub fn new(combat_reader_id: ReaderId<CombatEvent>) -> Self {
-        Self{combat_reader_id}
+    pub fn new(combat_reader_id: ReaderId<CombatEvent>, ui_reader_id: ReaderId<amethyst::ui::UiEvent>) -> Self {
+        Self{combat_reader_id, ui_reader_id}
     }
 }
 
 impl<'s> System<'s> for CombatEvaluationSystem {
-    type SystemData = Read<'s, EventChannel<CombatEvent>>;
+    type SystemData = (
+                    WriteExpect<'s, TurnOrder>,
+                    Read<'s, EventChannel<amethyst::ui::UiEvent>>,
+                    Write<'s, EventChannel<CombatEvent>>,
+                    WriteStorage<'s, Monster>,
+                    WriteExpect<'s, Player>,
+                    );
 
-    fn run(&mut self, events: Self::SystemData) {
-        for event in events.read(&mut self.combat_reader_id) {
-            println!("Received combat event: {:?}", event)
+    fn run(&mut self, (mut turn_order, 
+                        ui_events, 
+                        mut combat_events, 
+                        mut monsters,
+                        mut player): 
+                        Self::SystemData) {
+        let mut combat_event: Option<CombatEvent> = None;
+
+        if turn_order.current() == UnitReference::Player {
+            for event in ui_events.read(&mut self.ui_reader_id) {
+                if event.event_type == UiEventType::ClickStart {
+                    combat_event = Some(CombatEvent::new(
+                        "You".to_owned(),
+                        UnitReference::Monster{ id: MonsterIdentifier::new(1) },
+                        SpellTemplate{damage: 42}));
+                }
+            }
+        } else {
+            combat_event = Some(CombatEvent::new(
+                "Gnoll".to_owned(),
+                UnitReference::Player,
+                SpellTemplate{damage: 12}));
         }
+
+        let mut event = match combat_event {
+            None => return,
+            Some(ev) => ev
+        };
+        
+        println!("Received combat event: {:?}", event);
+        
+        let spell_target = event.target.clone();
+        match spell_target {
+            UnitReference::Player => {
+                handle_player_target(&mut player, &mut event);
+            }
+            UnitReference::Monster { id } => {
+                for mut potential_monster in (&mut monsters).join() {
+                    println!("Monster eval: {:?}", potential_monster);
+                    if potential_monster.id == id {
+                        handle_monster_target(&mut potential_monster, &mut event);
+                    }
+                }
+            }
+        }
+        
+        combat_events.single_write(event);
+
+        turn_order.advance();
+    }
+}
+
+fn handle_player_target(player: &mut Player, event: &mut CombatEvent) -> () {
+    let remaining_hp: i32 = player.health.current - event.spell_template.damage as i32;
+
+    if remaining_hp > 0 {
+        event.add_result(CombatResult::TakeDamage(event.spell_template.damage));
+        player.health.current -= event.spell_template.damage as i32;
+    } else {
+        event.add_result(CombatResult::TakeDamage(player.health.current as u32));
+        event.add_result(CombatResult::Death);
+        player.health.current = 0;
+    }
+}
+
+fn handle_monster_target(monster: &mut Monster, event: &mut CombatEvent) {
+    // This monster is the target of the spell in CombatEvent, what happens? Take damage etc.
+
+    let monster_hp: i32 = monster.health.current - event.spell_template.damage as i32;
+    if monster_hp > 0 {
+        event.add_result(CombatResult::TakeDamage(event.spell_template.damage));
+        monster.health.current -= event.spell_template.damage as i32;
+    } else {
+        event.add_result(CombatResult::TakeDamage(monster.health.current as u32));
+        event.add_result(CombatResult::Death);
+        monster.health.current = 0;
     }
 }

@@ -2,10 +2,10 @@ use amethyst::{assets::Loader, core::{transform::Transform}, ecs::Entity, input:
 
 use log::info;
 
-use crate::systems::{combat::CombatEvent, eventlog::EventLogSystem};
-use crate::systems::combat::PlayerTurnSystemDesc;
+use crate::{data::monster::CurrMax, systems::{combat::CombatEvent, eventlog::EventLogSystem}};
 use crate::systems::combat::CombatEvaluationSystemDesc;
 use crate::systems::eventlog::EventLogSystemDesc;
+use crate::data::monster::*;
 
 #[derive(Default)]
 pub struct CombatState<'a, 'b> {
@@ -34,6 +34,12 @@ impl<'a, 'b> SimpleState for CombatState<'a, 'b> {
 
         create_event_log(world);
 
+        create_monster(world);
+
+        world.insert(TurnOrder::new(vec![UnitReference::Player,
+                                              UnitReference::Monster{ id: MonsterIdentifier::new(1) }]));
+
+        world.insert(Player{ health: CurrMax{ current: 200, max: 200 }});
     }
 
     /// The following events are handled:
@@ -68,19 +74,22 @@ impl<'a, 'b> SimpleState for CombatState<'a, 'b> {
     }
 }
 
+fn create_monster(world: &mut World) {
+    world.create_entity()
+        .with(Monster{
+            id: MonsterIdentifier::new(1),
+            attack: 4,
+            health: CurrMax{current: 50, max: 50}})
+        .build();
+}
+
 fn create_state_dispatcher<'a, 'b>(world: &mut World) -> Dispatcher<'a, 'b> {
     let mut builder = DispatcherBuilder::new();
 
     builder.add(
-        PlayerTurnSystemDesc::default().build(world),
-        "PlayerTurnSystem",
-        &[],
-    );
-
-    builder.add(
         CombatEvaluationSystemDesc::default().build(world),
         "CombatEvaluationSystem",
-        &["PlayerTurnSystem"],
+        &[],
     );
 
     builder.add(
@@ -116,7 +125,6 @@ fn create_buttons(world: &mut World, rows: u32, cols: u32, texts: Vec<String>) -
 
     for y in 0..rows {
         for x in 0..cols {
-            // TODO, how do i get the x + y*rows?
             let text: &String = texts.get((x+y*cols) as usize).unwrap();
             buttons.push(create_button(world, start_x+x*x_offset, start_y+y*y_offset,
                 width, height, text));
