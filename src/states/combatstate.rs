@@ -1,8 +1,10 @@
+use std::collections::HashMap;
+
 use amethyst::{assets::Loader, core::{transform::Transform}, ecs::Entity, input::{get_key, is_close_requested, is_key_down, VirtualKeyCode}, prelude::*, renderer::Camera, shred::{Dispatcher, DispatcherBuilder}, shrev::EventChannel, ui::{Anchor, FontHandle, LineMode, TtfFormat, UiImage, UiText, UiTransform}, window::ScreenDimensions};
 
 use log::info;
 
-use crate::{data::monster::CurrMax, systems::{combat::CombatEvent, eventlog::EventLogSystem}};
+use crate::{data::{ButtonAction, ButtonMap, monster::CurrMax}, systems::{combat::{CombatEvent, SpellTemplate}, eventlog::EventLogSystem}};
 use crate::systems::combat::CombatEvaluationSystemDesc;
 use crate::systems::eventlog::EventLogSystemDesc;
 use crate::data::monster::*;
@@ -27,10 +29,17 @@ impl<'a, 'b> SimpleState for CombatState<'a, 'b> {
 
         self.dispatcher = Some(create_state_dispatcher(world));
 
-        let texts = vec!["Claw".to_string(), "Stab".into(), "Fireball".into(), "Chicken".into(), 
-                                           "Suicide".into(), "Inventory".into(), "".into(), "Escape".into()];
-        let buttons = create_buttons(world, 2, 4, texts);
-        println!("{:?}", buttons);
+        let texts = vec![
+        ("Claw".to_string(), ButtonAction::CastSpell{ spell_template: SpellTemplate{ damage: 10 } }), 
+        ("Stab".into(),      ButtonAction::CastSpell{ spell_template: SpellTemplate{ damage: 12 } }), 
+        ("".into(),          ButtonAction::Nothing), 
+        ("".into(),          ButtonAction::Nothing), 
+        ("".into(),          ButtonAction::Nothing), 
+        ("Inventory".into(), ButtonAction::Nothing), 
+        ("Escape".into(),    ButtonAction::Nothing), 
+        ("End Turn".into(),  ButtonAction::Nothing)];
+
+        create_buttons(world, 2, 4, texts);
 
         create_event_log(world);
 
@@ -113,7 +122,7 @@ fn init_camera(world: &mut World, dimensions: &ScreenDimensions) {
 }
 
 
-fn create_buttons(world: &mut World, rows: u32, cols: u32, texts: Vec<String>) -> Vec<Entity> {
+fn create_buttons(world: &mut World, rows: u32, cols: u32, texts: Vec<(String, ButtonAction)>) {
     let width: u32 = 90;
     let height: u32 = 20;
     let start_x: u32 = 10 + width/2;
@@ -121,16 +130,20 @@ fn create_buttons(world: &mut World, rows: u32, cols: u32, texts: Vec<String>) -
     let x_offset: u32 = 100;
     let y_offset: u32 = 30;
 
-    let mut buttons: Vec<Entity> = Vec::new();
+    let mut button_map: HashMap<Entity, ButtonAction> = HashMap::new();
 
+    // TODO, this prints the buttons in the reverse order
     for y in 0..rows {
         for x in 0..cols {
-            let text: &String = texts.get((x+y*cols) as usize).unwrap();
-            buttons.push(create_button(world, start_x+x*x_offset, start_y+y*y_offset,
-                width, height, text));
+            let text = texts.get((x+y*cols) as usize).unwrap();
+            button_map.insert(
+                create_button(world, start_x+x*x_offset, start_y+y*y_offset, width, height, &text.0),
+                text.1.clone()
+            );
         }
     }
-    buttons
+    
+    world.insert(ButtonMap{ map: button_map });
 }
 
 fn create_button(world: &mut World, x: u32, y: u32, w: u32, h: u32, text: &String) -> Entity {

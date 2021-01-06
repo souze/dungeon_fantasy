@@ -2,7 +2,7 @@ use amethyst::{ecs::{ReadStorage, WriteStorage}, prelude::*, shred::{Read, ReadE
 use amethyst::derive::*;
 use amethyst::ecs::Join;
 
-use crate::data::{Player, TurnOrder, monster::{Monster, MonsterIdentifier}};
+use crate::data::{ButtonAction, ButtonMap, Player, TurnOrder, monster::{Monster, MonsterIdentifier}};
 use crate::data::monster::UnitReference;
 
 #[derive(Debug)]
@@ -30,9 +30,9 @@ enum CombatResult {
     Death,
 }
 
-#[derive(Debug)]
-struct SpellTemplate {
-    damage: u32,
+#[derive(Debug, Clone)]
+pub struct SpellTemplate {
+    pub damage: u32,
 }
 
 #[derive(SystemDesc)]
@@ -53,6 +53,7 @@ impl CombatEvaluationSystem {
 impl<'s> System<'s> for CombatEvaluationSystem {
     type SystemData = (
                     WriteExpect<'s, TurnOrder>,
+                    ReadExpect<'s, ButtonMap>,
                     Read<'s, EventChannel<amethyst::ui::UiEvent>>,
                     Write<'s, EventChannel<CombatEvent>>,
                     WriteStorage<'s, Monster>,
@@ -60,6 +61,7 @@ impl<'s> System<'s> for CombatEvaluationSystem {
                     );
 
     fn run(&mut self, (mut turn_order, 
+                        button_map,
                         ui_events, 
                         mut combat_events, 
                         mut monsters,
@@ -70,10 +72,17 @@ impl<'s> System<'s> for CombatEvaluationSystem {
         if turn_order.current() == UnitReference::Player {
             for event in ui_events.read(&mut self.ui_reader_id) {
                 if event.event_type == UiEventType::ClickStart {
-                    combat_event = Some(CombatEvent::new(
-                        "You".to_owned(),
-                        UnitReference::Monster{ id: MonsterIdentifier::new(1) },
-                        SpellTemplate{damage: 42}));
+                    match button_map.map.get(&event.target) {
+                        Some(ButtonAction::CastSpell { spell_template }) => {
+                            println!("Casting {:?}", spell_template);
+                            combat_event = Some(CombatEvent::new(
+                                "You".to_owned(),
+                                UnitReference::Monster{ id: MonsterIdentifier::new(1) },
+                                spell_template.clone()))
+                            },
+                        Some(ButtonAction::Nothing) => println!("Pressed a nothing button"),
+                        None => println!("Button not mapped"),
+                    }
                 }
             }
         } else {
