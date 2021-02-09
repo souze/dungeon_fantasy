@@ -1,0 +1,12 @@
+[package]
+name = "dungeon_fantasy2"
+version = "0.1.0"
+authors = ["Erik Karlsson <triggger@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+macroquad = "0.3.0-alpha.14"
+egui = "0.8.0"
+# egui_demo_lib = "0.8.1" # For example
